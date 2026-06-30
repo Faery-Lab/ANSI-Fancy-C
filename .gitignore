@@ -1,0 +1,17 @@
+# Code::Blocks
+.objs/
+objs/
+obj/
+bin/
+
+# Dependency and project layout files
+.depend
+*.layout
+
+# Build Artifacts
+*.o
+*.obj
+*.exe
+*.a
+*.so
+*.out

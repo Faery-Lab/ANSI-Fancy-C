@@ -1,0 +1,12 @@
+# depslib dependency file v1.0
+1782786850 source:c:\users\fenni\documents\dev\c\ansi_fancy\main.c
+	<stdio.h>
+	<stdlib.h>
+	"ANSI_Fancy.h"
+
+1782783297 c:\users\fenni\documents\dev\c\ansi_fancy\ansi_fancy.h
+	"ANSI_Fancy_Config.h"
+
+1782786872 c:\users\fenni\documents\dev\c\ansi_fancy\ansi_fancy_config.h
+	<windows.h>
+
