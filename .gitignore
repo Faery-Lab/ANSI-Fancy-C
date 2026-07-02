@@ -6,6 +6,7 @@ bin/
 
 # Dependency and project layout files
 .depend
+*.depend
 *.layout
 
 # Build Artifacts
