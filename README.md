@@ -11,6 +11,11 @@ This project provides a simple way to format terminal output with box-drawing ch
 ### ✨ Features
 * **Flows:** Create grouped, connected lists of text with customizable indentation.
 * **Menu Boxes:** Create centered boxes with a header and listed content items.
+* **Menu Boxes with Prompts:** Create Menu Boxes which prompt the user for input.
+
+<p align="center">
+  <img src="DemoOutput.png" alt="Quick start output" />
+</p>
 
 ---
 
