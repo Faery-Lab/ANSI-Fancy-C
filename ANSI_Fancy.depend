@@ -10,3 +10,14 @@
 1782786872 c:\users\fenni\documents\dev\c\ansi_fancy\ansi_fancy_config.h
 	<windows.h>
 
+1782787326 source:c:\dev\ansi-fancy-c\main.c
+	<stdio.h>
+	<stdlib.h>
+	"ANSI_Fancy.h"
+
+1782783297 c:\dev\ansi-fancy-c\ansi_fancy.h
+	"ANSI_Fancy_Config.h"
+
+1782786943 c:\dev\ansi-fancy-c\ansi_fancy_config.h
+	<windows.h>
+
