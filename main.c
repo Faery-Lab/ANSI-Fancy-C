@@ -31,6 +31,21 @@ int main() {
 
 
 
+    printf("\n");
+
+    ProgressBar(GetRGBColor(64, 255, 64), 256, "PROGRESS: ", 0, 100, 0); // Initial creation of the bar (isUpdate = 0).
+
+    // Simulate progress updates.
+    for (int i = 1; i <= 100; i ++) {
+        Sleep(5);                                                              // Wait 5 milliseconds (0.005 seconds) to simulate processing.
+        ProgressBar(GetRGBColor(64, 255, 64), 256, "PROGRESS: ", i, 100, 1);     // Update the loading bar (isUpdate = 1).
+    }
+    ProgressBar(GetRGBColor(128, 255, 128), 256, "PROGRESS: ", 100, 100, 1);     // Update the loading bar with a brighter color once it completes.
+
+    printf("\n");
+
+
+
 
     printf("\n         " ANSI_YELLOW ANSI_SLANT "======== ADVANCED USAGE ========" ANSI_RESET "\n");
 
@@ -46,16 +61,60 @@ int main() {
         char *response = MenuBoxPrompt(ANSI_CYAN, 50, 3, "ANSI FANCY DEMO", menuBoxPromptContent, ANSI_DIM ANSI_SLANT ANSI_WHITE "Select Option: " ANSI_RESET ANSI_DIM "(" ANSI_BLUE "1 " ANSI_RESET ANSI_DIM "or " ANSI_DIM ANSI_BLUE "2" ANSI_RESET ANSI_DIM ")" ANSI_RESET);
         if (atoi(response) == 1) {
             FlowStart(ANSI_BLUE, 5);
-            FlowAdd(ANSI_RED " OPERATION A" ANSI_RESET);
-            FlowAdd(ANSI_YELLOW " OPERATION B" ANSI_RESET);
-            FlowAdd(ANSI_GREEN " OPERATION C" ANSI_RESET);
+            FlowAdd(ANSI_RED " OPERATION A BEGINNING..." ANSI_RESET);
+            ProgressBar(GetRGBColor(128, 64, 64), 256, "OPERATION A: ", 0, 100, 0);
+            for (int i = 1; i <= 100; i ++) {
+            Sleep(5);
+            ProgressBar(GetRGBColor(128, 64, 64), 256, "OPERATION A: ", i, 100, 1);
+            }
+            ProgressBar(GetRGBColor(255, 128, 128), 256, "OPERATION A: ", 100, 100, 1);
+
+            FlowAdd(ANSI_YELLOW " OPERATION B BEGINNING..." ANSI_RESET);
+            ProgressBar(GetRGBColor(128, 128, 64), 256, "OPERATION B: ", 0, 100, 0);
+            for (int i = 1; i <= 100; i ++) {
+            Sleep(5);
+            ProgressBar(GetRGBColor(128, 128, 64), 256, "OPERATION B: ", i, 100, 1);
+            }
+            ProgressBar(GetRGBColor(255, 255, 128), 256, "OPERATION B: ", 100, 100, 1);
+
+            FlowAdd(ANSI_GREEN " OPERATION C BEGINNING..." ANSI_RESET);
+            ProgressBar(GetRGBColor(64, 128, 64), 256, "OPERATION C: ", 0, 100, 0);
+            for (int i = 1; i <= 100; i ++) {
+            Sleep(5);
+            ProgressBar(GetRGBColor(64, 128, 64), 256, "OPERATION C: ", i, 100, 1);
+            }
+            ProgressBar(GetRGBColor(128, 255, 128), 256, "OPERATION C: ", 100, 100, 1);
+
+            FlowAdd(ANSI_SLANT ANSI_CYAN " OPERATIONS FINISHED!" ANSI_RESET);
             FlowFinish();
             choosing = 0;
         } else if (atoi(response) == 2) {
             FlowStart(ANSI_BLUE, 5);
-            FlowAdd(ANSI_GREEN " OPERATION C" ANSI_RESET);
-            FlowAdd(ANSI_YELLOW " OPERATION B" ANSI_RESET);
-            FlowAdd(ANSI_RED " OPERATION A" ANSI_RESET);
+            FlowAdd(ANSI_GREEN " OPERATION C BEGINNING..." ANSI_RESET);
+            ProgressBar(GetRGBColor(64, 128, 64), 256, "OPERATION C: ", 0, 100, 0);
+            for (int i = 1; i <= 100; i ++) {
+            Sleep(5);
+            ProgressBar(GetRGBColor(64, 128, 64), 256, "OPERATION C: ", i, 100, 1);
+            }
+            ProgressBar(GetRGBColor(128, 255, 128), 256, "OPERATION C: ", 100, 100, 1);
+
+            FlowAdd(ANSI_YELLOW " OPERATION B BEGINNING..." ANSI_RESET);
+            ProgressBar(GetRGBColor(128, 128, 64), 256, "OPERATION B: ", 0, 100, 0);
+            for (int i = 1; i <= 100; i ++) {
+            Sleep(5);
+            ProgressBar(GetRGBColor(128, 128, 64), 256, "OPERATION B: ", i, 100, 1);
+            }
+            ProgressBar(GetRGBColor(255, 255, 128), 256, "OPERATION B: ", 100, 100, 1);
+
+            FlowAdd(ANSI_RED " OPERATION A BEGINNING..." ANSI_RESET);
+            ProgressBar(GetRGBColor(128, 64, 64), 256, "OPERATION A: ", 0, 100, 0);
+            for (int i = 1; i <= 100; i ++) {
+            Sleep(5);
+            ProgressBar(GetRGBColor(128, 64, 64), 256, "OPERATION A: ", i, 100, 1);
+            }
+            ProgressBar(GetRGBColor(255, 128, 128), 256, "OPERATION A: ", 100, 100, 1);
+
+            FlowAdd(ANSI_SLANT ANSI_CYAN " OPERATIONS FINISHED!" ANSI_RESET);
             FlowFinish();
             choosing = 0;
         } else {

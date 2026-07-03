@@ -9,6 +9,9 @@
 
 #define PROMPT_MARK "[>]"           // The symbol(s) used to indicate a user input.
 
+#define BAR_FILLED "●"              // The symbol used to indicate a filled progress bar tick.
+#define BAR_EMPTY "○"               // The symbol used to indicate an empty progress bar tick.
+
 
 // Define ANSI escape codes for ease of terminal formatting
 #define ANSI_PREFIX "\x1b"
@@ -49,6 +52,20 @@ static inline void InitializeConsole() {
     SetConsoleMode(hOut, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
     // This ensures the characters render properly.
     SetConsoleOutputCP(CP_UTF8);
+}
+
+// Convert RGB colors into ANSI escape sequences using 8-bit notation (ANSI_ESCAPE 38;5;COLORm) for 256 total colors.
+static inline const char* Get8BitColor(int color) {
+    static char colorCode[32];                                                      // Stores the text for the ANSI escape code.
+    snprintf(colorCode, sizeof(colorCode), ANSI_PREFIX "[38;5;%dm", color);         // Read the chosen colors into the escape code.
+    return colorCode;                                                               // Return the color code to the user.
+}
+
+// Convert RGB colors into ANSI escape sequences using 24-bit notation (ANSI_ESCAPE R;G;Bm) for 16,777,216 total colors.
+static inline const char* GetRGBColor(int r, int g, int b) {
+    static char colorCode[32];                                                           // Stores the text for the ANSI escape code.
+    snprintf(colorCode, sizeof(colorCode), ANSI_PREFIX "[38;2;%d;%d;%dm", r, g, b);      // Read the chosen colors into the escape code.
+    return colorCode;                                                                    // Return the color code to the user.
 }
 
 // Characters which can be used as break points are specified here.
@@ -100,7 +117,5 @@ static inline int GetRegularCharacters(char *text) {
     }
     return regularCharacters;
 }
-
-
 
 #endif // ANSI_FANCY_CONFIG_H_INCLUDED

@@ -9,9 +9,12 @@ A header-only C library for Windows to create colorized formatted text in the co
 This project provides a simple way to format terminal output with box-drawing characters and color support. It includes automatic word-wrapping and structural management, perfect for CLI tools that need to present hierarchical data or stepwise logs.
 
 ### ✨ Features
+* **24-Bit Color:** Access to 16,777,216 different colors (with additional 8-bit color support).
+* **Font Styles:** Acess to 7 different font options, including Bold, Underlined, and Italic.
 * **Flows:** Create grouped, connected lists of text with customizable indentation.
 * **Menu Boxes:** Create centered boxes with a header and listed content items.
 * **Menu Boxes with Prompts:** Create Menu Boxes which prompt the user for input.
+* **Progress Bars:** Create customizable loading bars, compatible with flows.
 
 <p align="center">
   <img src="DemoOutput.png" alt="Quick start output" />
@@ -36,6 +39,7 @@ This project provides a simple way to format terminal output with box-drawing ch
 3.  Add a (null terminated) char pointer array for the menu content.
 4.  Use the MenuBox function to display some data.
 5.  Use the `Flow` functions to structure your output.
+6.  Track progress in stepwise events using progress bars.
 
 ```c
 #include <stdio.h>
@@ -64,6 +68,18 @@ int main() {
 
     // Close the flow with the bottom connector.
     FlowFinish();
+
+    printf("\n");
+    
+    // Initial creation of the bar (isUpdate = 0).
+    ProgressBar(GetRGBColor(64, 255, 64), 256, "PROGRESS: ", 0, 100, 0); 
+
+    // Simulate progress updates.
+    for (int i = 1; i <= 100; i ++) {
+        Sleep(5);                                                                   // Wait 5 milliseconds (0.005 seconds) to simulate processing.
+        ProgressBar(GetRGBColor(64, 255, 64), 256, "PROGRESS: ", i, 100, 1);        // Update the loading bar (isUpdate = 1).
+    }
+    ProgressBar(GetRGBColor(128, 255, 128), 256, "PROGRESS: ", 100, 100, 1);        // Update the loading bar with a brighter color once it completes.
 }
 ```
 Output (with CONSOLE_WIDTH set to 52):

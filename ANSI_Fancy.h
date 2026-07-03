@@ -396,4 +396,77 @@ static inline char *MenuBoxPrompt(char *boxColor, int boxWidth, int boxHeight, c
     return userInput;       // Return the user's input for external use.
 }
 
+// Displays a stylized loading bar with a label and a percentage readout (compatible with flows).
+static inline void ProgressBar(char *barColor, int maxBarWidth, const char *label, long current, long total, int isUpdate) {
+    if (total <= 0) return;                         // If there is no total (no bar to print), return to avoid division by zero when determining percentage.
+    if (isUpdate) printf(ANSI_RETURN);              // If updating the existing bar, move the cursor back up and erase the line to overwrite it.
+
+    int percentage = (int)((current * 100LL) / total);      // Determine the percentage of the loading bar to fill.
+    if (percentage > 100) percentage = 100;                 // Cap the percentage at 100%.
+
+    int indent = 8;                                                 // Account for spaces and percentage.
+    int labelLen = GetRegularCharacters(label);                     // Determine the length of the label.
+    int flowOffset = insideFlow ? (1 + flowWidth) : 0;              // Determine whether or not to offset (if a flow is active).
+    int availableWidth = CONSOLE_WIDTH - indent - flowOffset;       // Determine the width available for printing the loading bar.
+
+    int minBarWidth = 4;                                                        // Set the minimum amount of loading bar ticks (25% increments).
+    int maxLabelWidth = availableWidth - minBarWidth;                           // Determine the maximum amount of room available for the label.
+    int textRoom = (labelLen > maxLabelWidth) ? maxLabelWidth : labelLen;       // Determine whether to truncate the label or not based on available space.
+
+    int remainingSpace = availableWidth - textRoom;                                         // Determine the amount of leftover space available to print the bar.
+    int activeBarWidth = (maxBarWidth < remainingSpace) ? maxBarWidth : remainingSpace;     // Determine whether to truncate the bar or not based on available space.
+
+    char adjustedText[256] = {0};       // Store the label string in case it needs to be shortened.
+    //  If the label is truncated, add an elipsis (...) to indicate.
+    if (labelLen > maxLabelWidth && maxLabelWidth > 3) {
+        strncpy(adjustedText, label, maxLabelWidth - 3);
+        strcat(adjustedText, "...");
+    // Copy the label to the adjusted text, then add a null terminator.
+    } else {
+        strncpy(adjustedText, label, textRoom);
+        adjustedText[textRoom] = '\0';
+    }
+
+    int filledLength = (percentage * activeBarWidth) / 100;     // Determine how many ticks should be colored (filled) and how many are unfilled (empty).
+
+    if (insideFlow) printf("%s│%*s" ANSI_RESET, currentFlowColor, flowWidth, "");       // If a flow is active, print the vertical separator line first and indent.
+
+    // Print the label, the opening bracket for the bar, and set the color for the progress part
+    printf("%s%s" ANSI_RESET ANSI_DIM " [" ANSI_RESET, barColor, adjustedText);
+
+    // Loop through the bar's width, printing a filled tick for progress or an empty tick for remaining work.
+    for (int i = 0; i < activeBarWidth; i++) {
+        if (i < filledLength) printf("%s" BAR_FILLED ANSI_RESET, barColor);
+        else printf(ANSI_DIM BAR_EMPTY ANSI_RESET);
+    }
+
+    printf(ANSI_DIM "]" ANSI_RESET " %s%3d%%" ANSI_RESET "  \n", barColor, percentage);   // Print the closing bracket and the percentage number.
+
+    fflush(stdout); // Force the output to appear on the screen immediately.
+}
+
+/*
+    Examples of progress bars inside of flows (with CONSOLE_WIDTH set to 52):
+
+    FlowStart(ANSI_BLUE, 2); // Start a blue flow.
+    FlowAdd("Initializing progress bar...");
+
+    ProgressBar(GetRGBColor(64, 255, 64), 256, "PROGRESS: ", 0, 100, 0); // Initial creation of the bar (isUpdate = 0).
+
+    // Simulate progress updates
+    for (int i = 1; i <= 100; i ++) {
+        Sleep(50);                                                              // Wait 50 milliseconds (0.05 seconds) to simulate processing.
+        ProgressBar(GetRGBColor(64, 255, 64), 256, "PROGRESS: ", i, 100, 1);     // Update the loading bar (isUpdate = 1).
+    }
+    ProgressBar(GetRGBColor(128, 255, 128), 256, "PROGRESS: ", 100, 100, 1);     // Update the loading bar with a brighter color once it completes.
+
+    FlowAdd("Bar complete!");   // Add a completion message.
+    FlowFinish();               // Finish the flow.
+
+┌──Initializing progress bar...
+│  PROGRESS:  [●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●] 100%
+└──Bar complete!
+
+*/
+
 #endif // ANSI_FANCY_H_INCLUDED
