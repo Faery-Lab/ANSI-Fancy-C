@@ -31,44 +31,82 @@ static inline void FlowAdd(char *content) {
         flowContent[flowRow] = strdup(content);
     }
 
-    int effectiveWidth = CONSOLE_WIDTH - (1 + flowWidth); // Calculate space left for actual text (next to the connectors).
-    int contentLength = strlen(content);             // Tracks the overall length of the content.
-    int cursor = 0;                                       // Track the current position while scanning through content.
-    int linesUsed = 0;                                    // Tracks lines used if the text wraps (too long for one row).
+    int effectiveWidth = CONSOLE_WIDTH - (1 + flowWidth);   // Calculate space left for actual text (next to the connectors).
+    int contentLength = strlen(content);                    // Tracks the overall length of the content.
+    int cursor = 0;                                         // Track the current position while scanning through content.
+    int linesUsed = 0;                                      // Tracks lines used if the text wraps (too long for one row).
+    char lastFont[32] = "";                                 // Tracks the last used ANSI escape sequence for font.
+    char lastColor[32] = "";                                // Tracks the last used ANSI escape sequence for color.
 
     // Loop through the content to handle word wrapping.
     while (cursor < contentLength) {
-        int remaining = contentLength - cursor;                                         // Track the number of remaining characters.
-        int chunkLength = (remaining <= effectiveWidth) ? remaining : effectiveWidth;   // Expect the length of the current chunk to be either the max allowed or less.
+        int regularCharacters = 0;      // Track the number of regular (not used for ANSI escape sequence) characters.
+        int chunkCursor = cursor;       // Track the position in the current content.
+        int breakPoint = -1;            // Track the position of the last used break point character.
 
         // Try to find a space to break the line along, rather than cutting a word in half.
-        if (remaining > effectiveWidth) {
-            int breakPoint = -1;                            // Initialize the break point outside of bounds, in case it is not used.
-            // Scan from the end of the chunk backwards looking for a whitespace character to use as a break point.
-            for (int ending = chunkLength - 1; ending >= 0; ending--) {
-                if (IsBreakPointCharacter(content[cursor + ending])) {
-                    breakPoint = ending;
-                    break;
-                }
+        while (chunkCursor < contentLength && regularCharacters < effectiveWidth) {
+            // Skip over ANSI escape sequences while determining the characters to print.
+            if (content[chunkCursor] == ANSI_PREFIX[0]) {
+                while (chunkCursor < contentLength && content[chunkCursor] != 'm' && content[chunkCursor] != 'A' && content[chunkCursor] != 'K') chunkCursor++;
+                chunkCursor++;
+            // Count this character as not being an escape code.
+            } else {
+                // Save the last used break point character.
+                if (IsBreakPointCharacter(content[chunkCursor])) breakPoint = chunkCursor;
+                regularCharacters++;
+                chunkCursor++;
             }
-            if (breakPoint != -1) chunkLength = breakPoint; // If no whitespace is found, break at the max length.
         }
+
+        int chunkLength = chunkCursor - cursor;                                                         // Determine how long the current chunk of text is.
+        if (chunkCursor < contentLength && breakPoint > cursor) chunkLength = breakPoint - cursor;      // Shorten to the break point if the line needs to be wrapped.
 
         // Print the start of the line with the correct connector (top-left-corner or t-bar).
         if (linesUsed == 0) {
-            const char *firstSymbol = (flowRow == 0) ? "┌" : "├";                       // Determine if this is the start of a new flow or the middle of an existing one.
-            printf("%s%s", currentFlowColor, firstSymbol);                              // Apply the color to the connector.
-            for(int i = 0; i < flowWidth; i++) printf("─");                             // Print the horizontal connector lines.
-            printf(ANSI_RESET "%.*s" ANSI_CLEAR "\n", chunkLength, content + cursor);   // Reset color, print the text (truncated at chunkLength), and clear the rest of the line.
+            const char *firstSymbol = (flowRow == 0) ? "┌" : "├";       // Determine if this is the start of a new flow or the middle of an existing one.
+            printf("%s%s", currentFlowColor, firstSymbol);              // Apply the color to the connector.
+            for(int i = 0; i < flowWidth; i++) printf("─");             // Print the horizontal connector lines.
         // Print a continuation line to indicate wrapping text (no horizontal connectors, just a vertical bar).
-        } else {
-            printf("%s│%*s", currentFlowColor, flowWidth, "");                          // Print the vertical connector and indent.
-            printf(ANSI_RESET "%.*s" ANSI_CLEAR "\n", chunkLength, content + cursor);   // Reset color, print the text (truncated at chunkLength), and clear the rest of the line.
+        } else printf("%s│%*s", currentFlowColor, flowWidth, "");
+
+        if (lastFont[0] != '\0') printf("%s", lastFont);        // Apply the last used font settings from the previous row.
+        if (lastColor[0] != '\0') printf("%s", lastColor);      // Apply the last used color settings from the previous row.
+
+        // Process chunk and update style buffers
+        int printCursor = 0;
+        while(printCursor < chunkLength) {
+            if (content[cursor + printCursor] == ANSI_PREFIX[0]) {
+                int start = cursor + printCursor;
+                // Skip past ANSI escape codes so they are not counted as printed to the screen.
+                while (printCursor < chunkLength && content[cursor + printCursor] != 'm' && content[cursor + printCursor] != 'A' && content[cursor + printCursor] != 'K') printCursor++;
+                int escapeLength = printCursor - (start - cursor) + 1;      // Determine how long the ANSI escape code was (if there was one).
+
+                // If no font or color settings were detected, set them as empty.
+                if (strncmp(content + start, ANSI_RESET, escapeLength) == 0) {
+                    lastFont[0] = '\0';
+                    lastColor[0] = '\0';
+                // If the last character of the escape sequence is 'm', than it is either a font or color code.
+                } else if (content[cursor + printCursor] == 'm') {
+                    // If the escape sequence has two characters following '[', it is a color code.
+                    if (printCursor > 1 && content[cursor + printCursor - 2] == '[') { strncpy(lastColor, content + start, escapeLength); lastColor[escapeLength] = '\0'; }
+                    // If the escape sequence only has one character following '[', it is a font code.
+                    else { strncpy(lastFont, content + start, escapeLength); lastFont[escapeLength] = '\0'; }
+                }
+                printf("%.*s", escapeLength, content + start);      // Print the ANSI escape sequence to apply the font or color.
+                printCursor++;                                      // Move to the next character in the current text.
+            // Print the current character and move to the next.
+            } else {
+                printf("%c", content[cursor + printCursor]);
+                printCursor++;
+            }
         }
 
-        cursor += chunkLength;
-        if (IsBreakPointCharacterRemoved(content[cursor])) cursor++;     // Skip the whitespace used as a breakpoint (if among removed characters).
-        linesUsed++;    // Increment the number of lines used by the content.
+        printf(ANSI_CLEAR "\n");    // End the line and clear the font and color for the next row.
+
+        cursor += chunkLength;                                                                      // Move the cursor to the beginning of the next chunk of text.
+        if (cursor < contentLength && IsBreakPointCharacterRemoved(content[cursor])) cursor++;      // If the break point character gets removed, skip past it.
+        linesUsed++;                                                                                // Increment the number of lines used by the content.
     }
 
     lastLineCount = linesUsed;  // Store how many lines this entry took up.
@@ -85,54 +123,88 @@ static inline void FlowFinish() {
 
     // Move cursor back up while erasing the last printed entry so the connector can be replaced with the right type.
     for (int i = 0; i < lastLineCount; i++) {
-        printf(ANSI_RETURN ANSI_ERASE); // Move up one line and erase the whole line.
+        printf(ANSI_RETURN ANSI_ERASE);     // Move up one line and erase the whole line.
     }
 
     char *lastContent = flowContent[flowRow - 1];
     int indentLength = 1 + flowWidth;
-    int effectiveWidth = CONSOLE_WIDTH - (1 + flowWidth); // Calculate space left for actual text (next to the connectors).
-    int contentLength = strlen(lastContent);         // Tracks the overall length of the content.
-    int cursor = 0;                                       // Track the current position while scanning through content.
-    int linesUsed = 0;                                    // Tracks lines used if the text wraps (too long for one row).
+    int effectiveWidth = CONSOLE_WIDTH - (1 + flowWidth);   // Calculate space left for actual text (next to the connectors).
+    int contentLength = strlen(lastContent);                // Tracks the overall length of the content.
+    int cursor = 0;                                         // Track the current position while scanning through content.
+    int linesUsed = 0;                                      // Tracks lines used if the text wraps (too long for one row).
+    char lastFont[32] = "";                                 // Tracks the last used ANSI escape sequence for font.
+    char lastColor[32] = "";                                // Tracks the last used ANSI escape sequence for color.
 
     // Repeat the adding process to re-write the bottom of the flow.
     while (cursor < contentLength) {
-        int remaining = contentLength - cursor;                                         // Track the number of remaining characters.
-        int chunkLength = (remaining <= effectiveWidth) ? remaining : effectiveWidth;   // Expect the length of the current chunk to be either the max allowed or less.
+        int regularCharacters = 0;      // Track the number of regular (not used for ANSI escape sequence) characters.
+        int chunkCursor = cursor;       // Track the position in the current content.
+        int breakPoint = -1;            // Track the position of the last used break point character.
 
         // Try to find a space to break the line along, rather than cutting a word in half.
-        if (remaining > effectiveWidth) {
-            int breakPoint = -1;                            // Initialize the break point outside of bounds, in case it is not used.
-            // Scan from the end of the chunk backwards looking for a whitespace character to use as a break point.
-            for (int ending = chunkLength - 1; ending >= 0; ending--) {
-                if (IsBreakPointCharacter(lastContent[cursor + ending])) {
-                    breakPoint = ending;
-                    break;
-                }
+        while (chunkCursor < contentLength && regularCharacters < effectiveWidth) {
+            // Skip over ANSI escape sequences while determining the characters to print.
+            if (lastContent[chunkCursor] == ANSI_PREFIX[0]) {
+                while (chunkCursor < contentLength && lastContent[chunkCursor] != 'm' && lastContent[chunkCursor] != 'A' && lastContent[chunkCursor] != 'K') chunkCursor++;
+                chunkCursor++;
+            // Count this character as not being an escape code.
+            } else {
+                // Save the last used break point character.
+                if (IsBreakPointCharacter(lastContent[chunkCursor])) breakPoint = chunkCursor;
+                regularCharacters++;
+                chunkCursor++;
             }
-            if (breakPoint != -1) chunkLength = breakPoint; // If no whitespace is found, break at the max length.
         }
+
+        int chunkLength = chunkCursor - cursor;                                                         // Determine how long the current chunk of text is.
+        if (chunkCursor < contentLength && breakPoint > cursor) chunkLength = breakPoint - cursor;      // Shorten to the break point if the line needs to be wrapped.
 
         // If only one entry was added to the flow, draw its connector as a horizontal line.
         if (linesUsed == 0 && flowRow == 1) {
-            printf("%s─", currentFlowColor);                                        // Use the horizontal line character.
+            printf("%s─", currentFlowColor);
             for(int i = 0; i < flowWidth; i++) printf("─");
-            printf(ANSI_RESET "%.*s" ANSI_CLEAR "\n", chunkLength, lastContent + cursor);
-        }
         // Print the final of multiple entries with the correct connector (bottom-left-corner).
-        else if (linesUsed == 0) {
-            printf("%s└", currentFlowColor);                                                // Use the bottom-left-corner character.
-            for(int i = 0; i < flowWidth; i++) printf("─");                                 // Print the horizontal connector lines.
-            printf(ANSI_RESET "%.*s" ANSI_CLEAR "\n", chunkLength, lastContent + cursor);   // Reset color, print the text (truncated at chunkLength), and clear the rest of the line.
+        } else if (linesUsed == 0) {
+            printf("%s└", currentFlowColor);
+            for(int i = 0; i < flowWidth; i++) printf("─");
         // Print an indent to indicate wrapping text (no horizontal connectors, or vertical bar).
-        } else {
-            printf("%s%*s", currentFlowColor, indentLength, "");                            // Print the indent.
-            printf(ANSI_RESET "%.*s" ANSI_CLEAR "\n", chunkLength, lastContent + cursor);   // Reset color, print the text (truncated at chunkLength), and clear the rest of the line.
-        }
+        } else printf("%s%*s", currentFlowColor, flowWidth + 1, "");
 
-        cursor += chunkLength;
-        if (IsBreakPointCharacterRemoved(lastContent[cursor])) cursor++;     // Skip the whitespace used as a breakpoint, (if among removed characters).
-        linesUsed++;    // Increment the number of lines used by the content.
+        if (lastFont[0] != '\0') printf("%s", lastFont);        // Apply the last used font settings from the previous row.
+        if (lastColor[0] != '\0') printf("%s", lastColor);      // Apply the last used color settings from the previous row.
+
+        int printCursor = 0;
+        while(printCursor < chunkLength) {
+            if (lastContent[cursor + printCursor] == ANSI_PREFIX[0]) {
+                int start = cursor + printCursor;
+                // Skip past ANSI escape codes so they are not counted as printed to the screen.
+                while (printCursor < chunkLength && lastContent[cursor + printCursor] != 'm' && lastContent[cursor + printCursor] != 'A' && lastContent[cursor + printCursor] != 'K') printCursor++;
+                int escapeLength = printCursor - (start - cursor) + 1;      // Determine how long the ANSI escape code was (if there was one).
+
+                // If no font or color settings were detected, set them as empty.
+                if (strncmp(lastContent + start, ANSI_RESET, escapeLength) == 0) {
+                    lastFont[0] = '\0';
+                    lastColor[0] = '\0';
+                // If the last character of the escape sequence is 'm', than it is either a font or color code.
+                } else if (lastContent[cursor + printCursor] == 'm') {
+                    // If the escape sequence has two characters following '[', it is a color code.
+                    if (printCursor > 1 && lastContent[cursor + printCursor - 2] == '[') { strncpy(lastColor, lastContent + start, escapeLength); lastColor[escapeLength] = '\0'; }
+                    // If the escape sequence only has one character following '[', it is a font code.
+                    else { strncpy(lastFont, lastContent + start, escapeLength); lastFont[escapeLength] = '\0'; }
+                }
+                printf("%.*s", escapeLength, lastContent + start);      // Print the ANSI escape sequence to apply the font or color.
+                printCursor++;                                          // Move to the next character in the current text.
+            // Print the current character and move to the next.
+            } else {
+                printf("%c", lastContent[cursor + printCursor]);
+                printCursor++;
+            }
+        }
+        printf(ANSI_CLEAR "\n");    // End the line and clear the font and color for the next row.
+
+        cursor += chunkLength;                                                                          // Move the cursor to the beginning of the next chunk of text.
+        if (cursor < contentLength && IsBreakPointCharacterRemoved(lastContent[cursor])) cursor++;      // If the break point character gets removed, skip past it.
+        linesUsed++;                                                                                    // Increment the number of lines used by the content.
     }
 
     // Free up the used memory and reset the global flow tracker variables.
@@ -140,8 +212,8 @@ static inline void FlowFinish() {
         free(flowContent[i]);
         flowContent[i] = NULL;
     }
-    insideFlow = 0;
-    flowRow = 0;
+    insideFlow = 0;             // Exit the flow.
+    flowRow++;                  // Move to the next flow slot.
 }
 
 /*
@@ -196,44 +268,112 @@ static inline void MenuBox(char *boxColor, int boxWidth, int boxHeight, char *he
     for (int i = 0; i < effectiveWidth - 2; i++) printf("─");   // Print the top border.
     printf("┐\n");                                              // Print the top-right corner.
 
-    int headerLength = GetRegularCharacters(header);                             // Determine the length of the header.
-    int headerPadding = (effectiveWidth - 2 - headerLength) / 2;   // Determine the padding on either side.
+    int maxWidth = effectiveWidth - 2;                          // Determine max space available for text inside the box (subtracting borders).
+    int cursor = 0;                                             // Track the current position in the entire header string.
+    int totalLength = strlen(header);                           // Track the total length of the header (including ANSI escape codes).
 
-    printOffset();                                                                              // Offset the row if needed.
-    printf("│");                                                                                // Print the left-side border of the header.
-    for (int i = 0; i < headerPadding; i++) printf(" ");                                        // Print left-side padding for the header.
-    printf("%s%s", header, boxColor);                                                                     // Print the text for the header, and return to the box color.
-    for (int i = 0; i < (effectiveWidth - 2 - headerLength - headerPadding); i++) printf(" ");  // Print right-side padding for the header.
-    printf("│\n");                                                                              // Print the right-side border.
+    // Process the header, breaking it into smaller chunks if it exceeds the width of the box.
+    while (cursor < totalLength) {
+        int regularCharacters = 0;      // Track the number of regular characters (not including ANSI escape sequences).
+        int chunkCursor = cursor;       // Track the position in the current chunk of text.
+        int breakPoint = -1;            // Track the position of the latest-used break point character.
+
+        // Determine which characters are printed and identify the break point.
+        while (chunkCursor < totalLength && regularCharacters < maxWidth) {
+            if (header[chunkCursor] == ANSI_PREFIX[0]) {
+                while (chunkCursor < totalLength && header[chunkCursor] != 'm'      // The end of the escape sequence (formatting and color).
+                                                 && header[chunkCursor] != 'A'      // The end of the escape sequence (return to previous line).
+                                                 && header[chunkCursor] != 'K'      // The end of the escape sequence (clear and erase).
+                      ) chunkCursor++;      // Skip past the current character of the escape sequence.
+                chunkCursor++;              // Skip past the last character of the escape sequence.
+            } else {
+                if (IsBreakPointCharacter(header[chunkCursor])) breakPoint = chunkCursor;   // Save where the break point is.
+                regularCharacters++;                                                        // Add the character to the count of regular characters.
+                chunkCursor++;                                                              // Skip to the next character.
+            }
+        }
+        int chunkSize = chunkCursor - cursor;                                                       // Determine the size of this chunk of text.
+        if (chunkCursor < totalLength && breakPoint > cursor) chunkSize = breakPoint - cursor;      // Try to find a space to break the line along, rather than cutting a word in half.
+
+        printOffset();      // Print the offset if needed.
+        printf("│");        // Print the left-side border of the header.
+
+        int printCursor = 0;                                    // Track the current position in the header while printing characters.
+        regularCharacters = 0;                                  // Clear the 'regularCharacters' counter for reuse.
+        char chunk[512];                                        // Save the current chunk of header text.
+        memcpy(chunk, header + cursor, chunkSize);              // Copy the header text into the chunk.
+        chunk[chunkSize] = '\0';                                // Append a null terminator to the end of the chunk text.
+        regularCharacters = GetRegularCharacters(chunk);        // Determine the number of regular characters (not including ANSI escape sequences) in the chunk.
+
+        int pad = (maxWidth - regularCharacters) / 2;           // Determine the padding needed in order to center the header text.
+        for(int i = 0; i < pad; i++) printf(" ");               // Print the left-side padding for centering the header text.
+
+        // Loop through the chunk while printing characters to the console.
+        while(printCursor < chunkSize) {
+            // Determine which characters are printed and which are escape sequences.
+            if (header[cursor + printCursor] == ANSI_PREFIX[0]) {
+                int start = cursor + printCursor;
+                while (printCursor < chunkSize && header[cursor + printCursor] != 'm'    // The end of the escape sequence (formatting and color).
+                                               && header[cursor + printCursor] != 'A'    // The end of the escape sequence (return to previous line).
+                                               && header[cursor + printCursor] != 'K'    // The end of the escape sequence (clear and erase).
+                      ) printCursor++;
+                int escapeLength = printCursor - (start - cursor) + 1;
+                // if this is a reset code, clear the saved color and font.
+                if (strncmp(header + start, ANSI_RESET, escapeLength) == 0) {
+                    lastColor[0] = '\0';
+                    lastFont[0] = '\0';
+                // If this is a color or font escape code, update the last used.
+                } else if (header[cursor + printCursor] == 'm') {
+                    // If the escape code has two characters following '[', it is a color code.
+                    if (printCursor > 1 && header[cursor + printCursor - 2] == '[') {
+                            strncpy(lastColor, header + start, escapeLength);
+                            lastColor[escapeLength] = '\0';
+                    }
+                    // If the escape code has one character following '[', it is a color code.
+                    else {
+                            strncpy(lastFont, header + start, escapeLength);
+                            lastFont[escapeLength] = '\0';
+                    }
+                }
+                printf("%.*s", escapeLength, header + start);           // Print the ANSI escape sequence to apply it to the current text.
+                printCursor++;                                          // Increment to the next position in the header text.
+            } else printf("%c", header[cursor + printCursor++]);        // Print the regular character and increment to the next.
+        }
+
+        for(int i = 0; i < (maxWidth - regularCharacters - pad); i++) printf(" ");              // Print the right-side padding for centering the header text.
+        printf(ANSI_RESET "%s│\n", boxColor);                                                   // Re-apply the box color and print the right-side border.
+        cursor += chunkSize;                                                                    // Increment the main cursor past the current chunk.
+        if (cursor < totalLength && IsBreakPointCharacterRemoved(header[cursor])) cursor++;     // If the break point character is included among the list of removed characters, skip over it.
+    }
 
     printOffset();                                              // Offset the row if needed.
     printf("├");                                                // Print the left divider border between the header and the content areas.
     for (int i = 0; i < effectiveWidth - 2; i++) printf("─");   // Print the divider.
     printf("┤\n");                                              // Print the right divider border.
 
-    int maxContentWidth = effectiveWidth - 3;       // Determine max space available for text inside the box (subtracting borders).
     int rowsPrinted = 0;                            // Keep track of how many lines of content have been drawn.
 
-    // Loop through the content array until hitting a null terminator.
+    // Loop through the content array until hitting a NULL.
     for (int i = 0; content[i] != NULL; i++) {
         lastColor[0] = '\0';                                    // Reset the color.
         lastFont[0] = '\0';                                     // Reset the font.
+        maxWidth = effectiveWidth - 3;                          // Determine max space available for text inside the box (subtracting borders and left-indent).
         char *text = content[i];                                // Save the current text item.
-        int textLengthTotal = strlen(text);                     // Track the total length of the current text item (including ANSI escape codes).
-        int cursor = 0;                                         // Track the current position in the entire text string.
+        totalLength = strlen(text);                             // Track the total length of the current text item (including ANSI escape codes).
+        cursor = 0;                                             // Track the current position in the entire text string.
 
         // Process the text, breaking it into smaller chunks if it exceeds the width of the box.
-        while (cursor < textLengthTotal) {
-            int regularCharacters = 0;
-            int chunkCursor = cursor;
-            int breakPoint = -1;
+        while (cursor < totalLength) {
+            int regularCharacters = 0;      // Track the number of regular characters (not including ANSI escape sequences).
+            int chunkCursor = cursor;       // Track the position in the current chunk of text.
+            int breakPoint = -1;            // Track the position of the latest-used break point character.
 
             // Determine which characters are printed and identify the break point.
-            while (chunkCursor < textLengthTotal && regularCharacters < maxContentWidth) {
+            while (chunkCursor < totalLength && regularCharacters < maxWidth) {
                 if (text[chunkCursor] == ANSI_PREFIX[0]) {
-                    while (chunkCursor < textLengthTotal && text[chunkCursor] != 'm'    // The end of the escape sequence (formatting and color).
-                                                         && text[chunkCursor] != 'A'    // The end of the escape sequence (return to previous line).
-                                                         && text[chunkCursor] != 'K'    // The end of the escape sequence (clear and erase).
+                    while (chunkCursor < totalLength && text[chunkCursor] != 'm'    // The end of the escape sequence (formatting and color).
+                                                     && text[chunkCursor] != 'A'    // The end of the escape sequence (return to previous line).
+                                                     && text[chunkCursor] != 'K'    // The end of the escape sequence (clear and erase).
                           ) chunkCursor++;      // Skip past the current character of the escape sequence.
                     chunkCursor++;              // Skip past the last character of the escape sequence.
                 } else {
@@ -243,25 +383,26 @@ static inline void MenuBox(char *boxColor, int boxWidth, int boxHeight, char *he
                 }
             }
 
-            int chunkSize = chunkCursor - cursor;                                                           // Determine the size of this chunk of text.
-            if (chunkCursor < textLengthTotal && breakPoint > cursor) chunkSize = breakPoint - cursor;      // Try to find a space to break the line along, rather than cutting a word in half.
+            int chunkSize = chunkCursor - cursor;                                                       // Determine the size of this chunk of text.
+            if (chunkCursor < totalLength && breakPoint > cursor) chunkSize = breakPoint - cursor;      // Try to find a space to break the line along, rather than cutting a word in half.
 
             printOffset();                                          // Print the offset if needed.
             printf("│ ");                                           // Print the left-side border.
             if (lastFont[0] != '\0') printf("%s", lastFont);        // Carry over the previous font.
             if (lastColor[0] != '\0') printf("%s", lastColor);      // Carry over the previous color.
 
-            // Re-scan only the chunk to update state while printing
-            int printCursor = 0;
-            while(printCursor < chunkSize) {
+            int printCursor = 0;                                        // Track the current position in the header while printing characters.
 
+            // Loop through the chunk while printing characters to the console.
+            while(printCursor < chunkSize) {
+                // Determine which characters are printed and which are escape sequences.
                 if (text[cursor + printCursor] == ANSI_PREFIX[0]) {
                     int start = cursor + printCursor;
-                    while (printCursor < chunkSize && text[cursor + printCursor] != 'm' // The end of the escape sequence (formatting and color).
-                                                   && text[cursor + printCursor] != 'A' // The end of the escape sequence (return to previous line).
-                                                   && text[cursor + printCursor] != 'K' // The end of the escape sequence (clear and erase).
-                          ) printCursor++;                                              // Skip past the current character of the escape sequence.
-                    int escapeLength = printCursor - (start - cursor) + 1;              // Track the length of the current ANSI escape code.
+                    while (printCursor < chunkSize && text[cursor + printCursor] != 'm'     // The end of the escape sequence (formatting and color).
+                                                   && text[cursor + printCursor] != 'A'     // The end of the escape sequence (return to previous line).
+                                                   && text[cursor + printCursor] != 'K'     // The end of the escape sequence (clear and erase).
+                          ) printCursor++;                                                  // Skip past the current character of the escape sequence.
+                    int escapeLength = printCursor - (start - cursor) + 1;                  // Track the length of the current ANSI escape code.
                     // if this is a reset code, clear the saved color and font.
                     if (strncmp(text + start, ANSI_RESET, escapeLength) == 0) {
                         lastColor[0] = '\0';
@@ -273,10 +414,9 @@ static inline void MenuBox(char *boxColor, int boxWidth, int boxHeight, char *he
                         else { strncpy(lastFont, text + start, escapeLength); lastFont[escapeLength] = '\0'; }
                     }
                     printf("%.*s", escapeLength, text + start);     // Print the ANSI escape sequence to apply it to the current text.
-                    printCursor++;
+                    printCursor++;                                  // Increment to the next position in the header text.
                 } else {
-                    printf("%c", text[cursor + printCursor]);       // Print the regular character.
-                    printCursor++;
+                    printf("%c", text[cursor + printCursor++]);       // Print the regular character and increment to the next.
                 }
             }
 
@@ -285,11 +425,11 @@ static inline void MenuBox(char *boxColor, int boxWidth, int boxHeight, char *he
             regularCharactersPrinted[chunkSize] = '\0';                                     // Null terminate the text.
             int regularCharactersChunk = GetRegularCharacters(regularCharactersPrinted);    // Count the number of printed characters (without counting escape codes).
 
-            for (int spaces = 0; spaces < (maxContentWidth - regularCharactersChunk); spaces++) printf(" ");    // Pad out the remaining space to the right of the breakpoint.
+            for (int spaces = 0; spaces < (maxWidth - regularCharactersChunk); spaces++) printf(" ");           // Pad out the remaining space to the right of the breakpoint.
             printf("%s│\n", boxColor);                                                                          // Print the right-side border.
 
             cursor += chunkSize;                                                                    // Reposition the primary text cursor.
-            if (cursor < textLengthTotal && IsBreakPointCharacterRemoved(text[cursor])) cursor++;   // If the break point character is included among the list of removed characters, skip over it.
+            if (cursor < totalLength && IsBreakPointCharacterRemoved(text[cursor])) cursor++;       // If the break point character is included among the list of removed characters, skip over it.
             rowsPrinted++;                                                                          // Increment the number of rows which have been printed.
         }
     }
@@ -361,7 +501,7 @@ static inline char *MenuBoxPrompt(char *boxColor, int boxWidth, int boxHeight, c
     // Internal helper function for printing the leading spaces for centering.
     void printOffset() { for (int i = 0; i < horizontalOffset; i++) printf(" "); }
 
-    MenuBox(boxColor, boxWidth, boxHeight, header, content);                        // Create the top section of the prompt.
+    MenuBox(boxColor, boxWidth, boxHeight, header, content);                    // Create the top section of the prompt.
     printf("%s " PROMPT_MARK " ", prompt);                                      // Print the prompt message.
     if (fgets(userInput, sizeof(userInput), stdin) == NULL) return NULL;        // Get the user's input, return NULL if nothing was entered (such as CTRL+C).
     // If no '\n' (enter key) is found , read any characters out of the (fgets) input stream to prevent them from auto-populating the next input.
@@ -396,6 +536,100 @@ static inline char *MenuBoxPrompt(char *boxColor, int boxWidth, int boxHeight, c
     return userInput;       // Return the user's input for external use.
 }
 
+// Displays a stylized box with a header and listed content items, prompts the user for input, then reformats the box to include confirmation only.
+static inline char *MenuBoxPromptSecure(char *boxColor, int boxWidth, int boxHeight, char *header, char **content, char *prompt) {
+    void failure(char *reason) {
+        char errorMessage[256];
+        snprintf(errorMessage, sizeof(errorMessage), ANSI_RED "%s" ANSI_RESET, reason);
+        char *errorBoxContent[] = {
+            errorMessage,
+            ANSI_RED "Error reading secure password. Terminating." ANSI_RESET,
+            NULL
+        };
+        MenuBox(ANSI_RED, 25, 2, ANSI_BLINK "ERROR" ANSI_RESET, errorBoxContent);
+    }
+
+    int horizontalOffset = (boxWidth < CONSOLE_WIDTH) ? (CONSOLE_WIDTH - boxWidth) / 2 : 0; // Determine how many spaces to print before the box are needed to center it horizontally.
+    static char userInput[256];                                                             // Track the user's response.
+
+    // Internal helper function for printing the leading spaces for centering.
+    void printOffset() { for (int i = 0; i < horizontalOffset; i++) printf(" "); }
+
+    MenuBox(boxColor, boxWidth, boxHeight, header, content);                        // Create the top section of the prompt.
+    printf("%s " PROMPT_MARK " ", prompt);                                          // Print the prompt message.
+
+    // Get the handle which listens to user input.
+    HANDLE userInputHandle = GetStdHandle(STD_INPUT_HANDLE);
+    if (userInputHandle == INVALID_HANDLE_VALUE) failure("Could not retrieve standard input handle.");
+
+    // Save the current console mode (the default) so it can be restored later.
+    DWORD defaultMode;
+    if (!GetConsoleMode(userInputHandle, &defaultMode)) failure("Could not read console mode.");
+
+    // Turn off input echoing (ENABLE_ECHO_INPUT) for an invisible password.
+    DWORD secureMode = defaultMode & ~ENABLE_ECHO_INPUT;
+    if (!SetConsoleMode(userInputHandle, secureMode)) failure("Could not disable echo flags.");
+
+    if (fgets(userInput, sizeof(userInput), stdin) == NULL) {
+        SetConsoleMode(userInputHandle, defaultMode);           // Restore the default terminal settings (turn echo back on).
+        printf("\n");                                           // Simulate an enter key press from the user submitting.
+        memset(userInput, 0, sizeof(userInput));                // Clear any junk data left in the userInput stream.
+        printf(ANSI_RETURN ANSI_RETURN);                        // The user has submitter the prompt, move upwards by two lines to redraw the bottom of the MenuBox.
+        printOffset();                                          // Print the offset if needed.
+        printf("%s├", boxColor);                                // Print the left divider border between the MenuBox and the prompt areas.
+        for (int i = 0; i < boxWidth - 2; i++) printf("─");     // Print the divider.
+        printf("┤\n");                                          // Print the right divider border.
+
+        int promptWidth = boxWidth - 5 - strlen(PROMPT_MARK) - GetRegularCharacters(prompt);    // Determine the width available for displaying the submitted prompt.
+        int inputLength = strlen(userInput);                                                    // Determine the width of the submitted prompt.
+        int maxPrint = (inputLength > promptWidth) ? promptWidth : inputLength;                 // Determine whether to show the whole submission or truncate.
+
+        printOffset();                                                              // Print the offset if needed.
+        printf("│ %s " PROMPT_MARK " %.*s%*s" ANSI_RESET "%s│" ANSI_CLEAR "\n",     // Print the left border, the prompt  and marker, the submission (right-padded with spaces), then the right border.
+            prompt,                                                                 // (%s) Print the (entire) prompt (s - as a string of text).
+            strlen(PROMPT_DECLINE), PROMPT_DECLINE,                                 // (%.*s) Print the PROMPT_DECLINE symbol(s) up to a PROMPT_DECLINE-length number of characters.
+            (int)(promptWidth - strlen(PROMPT_DECLINE)), "",                        // (%*s) Print a (promptWidth - PROMPT_DECLINE length) (the remaining space on the line) number of space characters.
+            boxColor);                                                              // Return to the color of the box.
+
+        printOffset();                                          // Print the offset if needed.
+        printf("└");                                            // Print the bottom-left corner.
+        for (int i = 0; i < boxWidth - 2; i++) printf("─");     // Print the bottom border.
+        printf("┘%s\n", ANSI_RESET);                            // Print the bottom-right corner, then reset console formatting to default.
+        return NULL;                                            // Return NULL if nothing was entered (such as CTRL+C).
+    }
+    // If no '\n' (enter key) is found , read any characters out of the (fgets) input stream to prevent them from auto-populating the next input.
+    if (strchr(userInput, '\n') == NULL) {
+        int overflow;                                                   // Save any extra characters into a temporary variable to consume them from input memory.
+        while ((overflow = getchar()) != '\n' && overflow != EOF);      // Use getchar() to read the stream until the null terminator (or the end of the stream) is found.
+    }
+    userInput[strcspn(userInput, "\r\n")] = '\0';   // Replace the symbol applied by submitting the prompt with a null terminator.
+
+    printf(ANSI_RETURN ANSI_RETURN);                        // The user has submitter the prompt, move upwards by two lines to redraw the bottom of the MenuBox.
+    printOffset();                                          // Print the offset if needed.
+    printf("%s├", boxColor);                                // Print the left divider border between the MenuBox and the prompt areas.
+    for (int i = 0; i < boxWidth - 2; i++) printf("─");     // Print the divider.
+    printf("┤\n");                                          // Print the right divider border.
+
+    int promptWidth = boxWidth - 5 - strlen(PROMPT_MARK) - GetRegularCharacters(prompt);    // Determine the width available for displaying the submitted prompt.
+    int inputLength = strlen(userInput);                                                    // Determine the width of the submitted prompt.
+    int maxPrint = (inputLength > promptWidth) ? promptWidth : inputLength;                 // Determine whether to show the whole submission or truncate.
+
+    printOffset();                                                              // Print the offset if needed.
+    printf("│ %s " PROMPT_MARK " %.*s%*s" ANSI_RESET "%s│" ANSI_CLEAR "\n",     // Print the left border, the prompt  and marker, the submission (right-padded with spaces), then the right border.
+        prompt,                                                                 // (%s) Print the (entire) prompt (s - as a string of text).
+        strlen(PROMPT_DECLINE), PROMPT_ACCEPT,                                  // (%.*s) Print the PROMPT_ACCEPT symbol(s) up to a PROMPT_ACCEPT-length number of characters.
+        (int)(promptWidth - strlen(PROMPT_ACCEPT)), "",                         // (%*s) Print a (promptWidth - PROMPT_ACCEPT length) (the remaining space on the line) number of space characters.
+        boxColor);                                                              // Return to the color of the box.
+
+    printOffset();                                          // Print the offset if needed.
+    printf("└");                                            // Print the bottom-left corner.
+    for (int i = 0; i < boxWidth - 2; i++) printf("─");     // Print the bottom border.
+    printf("┘%s\n", ANSI_RESET);                            // Print the bottom-right corner, then reset console formatting to default.
+    SetConsoleMode(userInputHandle, defaultMode);           // Restore the default terminal settings (turn echo back on).
+
+    return userInput;       // Return the user's input for external use.
+}
+
 // Displays a stylized loading bar with a label and a percentage readout (compatible with flows).
 static inline void ProgressBar(char *barColor, int maxBarWidth, const char *label, long current, long total, int isUpdate) {
     if (total <= 0) return;                         // If there is no total (no bar to print), return to avoid division by zero when determining percentage.
@@ -405,20 +639,20 @@ static inline void ProgressBar(char *barColor, int maxBarWidth, const char *labe
     if (percentage > 100) percentage = 100;                 // Cap the percentage at 100%.
 
     int indent = 8;                                                 // Account for spaces and percentage.
-    int labelLen = GetRegularCharacters(label);                     // Determine the length of the label.
+    int labelLength = GetRegularCharacters(label);                  // Determine the length of the label.
     int flowOffset = insideFlow ? (1 + flowWidth) : 0;              // Determine whether or not to offset (if a flow is active).
     int availableWidth = CONSOLE_WIDTH - indent - flowOffset;       // Determine the width available for printing the loading bar.
 
-    int minBarWidth = 4;                                                        // Set the minimum amount of loading bar ticks (25% increments).
-    int maxLabelWidth = availableWidth - minBarWidth;                           // Determine the maximum amount of room available for the label.
-    int textRoom = (labelLen > maxLabelWidth) ? maxLabelWidth : labelLen;       // Determine whether to truncate the label or not based on available space.
+    int minBarWidth = 4;                                                              // Set the minimum amount of loading bar ticks (25% increments).
+    int maxLabelWidth = availableWidth - minBarWidth;                                 // Determine the maximum amount of room available for the label.
+    int textRoom = (labelLength > maxLabelWidth) ? maxLabelWidth : labelLength;       // Determine whether to truncate the label or not based on available space.
 
     int remainingSpace = availableWidth - textRoom;                                         // Determine the amount of leftover space available to print the bar.
     int activeBarWidth = (maxBarWidth < remainingSpace) ? maxBarWidth : remainingSpace;     // Determine whether to truncate the bar or not based on available space.
 
     char adjustedText[256] = {0};       // Store the label string in case it needs to be shortened.
-    //  If the label is truncated, add an elipsis (...) to indicate.
-    if (labelLen > maxLabelWidth && maxLabelWidth > 3) {
+    //  If the label is truncated, add an ellipsis (...) to indicate.
+    if (labelLength > maxLabelWidth && maxLabelWidth > 3) {
         strncpy(adjustedText, label, maxLabelWidth - 3);
         strcat(adjustedText, "...");
     // Copy the label to the adjusted text, then add a null terminator.

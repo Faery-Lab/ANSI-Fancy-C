@@ -14,8 +14,10 @@ This project provides a simple way to format terminal output with box-drawing ch
 * **Flows:** Create grouped, connected lists of text with customizable indentation.
 * **Menu Boxes:** Create centered boxes with a header and listed content items.
 * **Menu Boxes with Prompts:** Create Menu Boxes which prompt the user for input.
+* **Menu Boxes with Secure\* Prompts:** Create Menu Boxes which prompt the user for input, while hiding the input.
 * **Progress Bars:** Create customizable loading bars, compatible with flows.
 
+\* *Best used alongside encryption if the data is stored.*
 <p align="center">
   <img src="DemoOutput.png" alt="Quick start output" />
 </p>

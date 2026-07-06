@@ -8,6 +8,8 @@
 #define FLOW_LEN 256                // The max number of characters allowed for flow content.
 
 #define PROMPT_MARK "[>]"           // The symbol(s) used to indicate a user input.
+#define PROMPT_DECLINE "-"
+#define PROMPT_ACCEPT "+"
 
 #define BAR_FILLED "●"              // The symbol used to indicate a filled progress bar tick.
 #define BAR_EMPTY "○"               // The symbol used to indicate an empty progress bar tick.

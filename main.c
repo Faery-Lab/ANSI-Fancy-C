@@ -33,21 +33,41 @@ int main() {
 
     printf("\n");
 
-    ProgressBar(GetRGBColor(64, 255, 64), 256, "PROGRESS: ", 0, 100, 0); // Initial creation of the bar (isUpdate = 0).
+    // Initial creation of the bar (isUpdate = 0).
+    ProgressBar(GetRGBColor(64, 255, 64), 256, "PROGRESS: ", 0, 100, 0);
 
     // Simulate progress updates.
     for (int i = 1; i <= 100; i ++) {
-        Sleep(5);                                                              // Wait 5 milliseconds (0.005 seconds) to simulate processing.
-        ProgressBar(GetRGBColor(64, 255, 64), 256, "PROGRESS: ", i, 100, 1);     // Update the loading bar (isUpdate = 1).
+        Sleep(5);                                                                   // Wait 5 milliseconds (0.005 seconds) to simulate processing.
+        ProgressBar(GetRGBColor(64, 255, 64), 256, "PROGRESS: ", i, 100, 1);        // Update the loading bar (isUpdate = 1).
     }
-    ProgressBar(GetRGBColor(128, 255, 128), 256, "PROGRESS: ", 100, 100, 1);     // Update the loading bar with a brighter color once it completes.
-
-    printf("\n");
-
+    ProgressBar(GetRGBColor(128, 255, 128), 256, "PROGRESS: ", 100, 100, 1);        // Update the loading bar with a brighter color once it completes.
 
 
 
     printf("\n         " ANSI_YELLOW ANSI_SLANT "======== ADVANCED USAGE ========" ANSI_RESET "\n");
+
+    char *menuBoxPromptSecureContent[] = {
+    ANSI_BOLD ANSI_WHITE "Enter the word '" ANSI_RESET ANSI_SLANT ANSI_BLUE "password" ANSI_RESET ANSI_BOLD ANSI_WHITE "' to continue." ANSI_RESET,
+    NULL
+    };
+
+    int enteringPassword = 1;
+    while (enteringPassword) {
+        char *passwordResponse = MenuBoxPromptSecure(ANSI_YELLOW, 50, 1, "SECURE PROMPT WITH REALLY LONG TEXT THAT WILL WRAP IN THE HEADER AREA", menuBoxPromptSecureContent, ANSI_DIM ANSI_SLANT ANSI_WHITE "Password:" ANSI_RESET);
+        if (passwordResponse != NULL && strcmp(passwordResponse, "password") == 0) {
+            FlowStart(ANSI_BLUE, 5);
+            FlowAdd(ANSI_GREEN " Password accepted!" ANSI_RESET);
+            FlowFinish();
+            enteringPassword = 0;
+        } else {
+            char *errorBoxContent[] = {
+                ANSI_RED "Please enter the word 'password' for more." ANSI_RESET,
+                NULL
+            };
+            MenuBox(ANSI_RED, 25, 2, ANSI_BLINK "ERROR" ANSI_RESET, errorBoxContent);
+        }
+    }
 
     char *menuBoxPromptContent[] = {
     ANSI_BOLD ANSI_WHITE "Which order do you want to run operations in?" ANSI_RESET,
